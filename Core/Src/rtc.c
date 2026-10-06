@@ -21,6 +21,7 @@
 #include "rtc.h"
 
 /* USER CODE BEGIN 0 */
+#include "rtc_time.h"
 
 /* USER CODE END 0 */
 
@@ -56,6 +57,12 @@ void MX_RTC_Init(void)
   }
 
   /* USER CODE BEGIN Check_RTC_BKUP */
+  /* Calendar already set on an earlier boot: keep it. The wake-up timer is
+   * re-armed by rtc_time_init() from app_init(). */
+  if (rtc_time_is_initialised())
+  {
+    return;
+  }
 
   /* USER CODE END Check_RTC_BKUP */
 
@@ -87,6 +94,9 @@ void MX_RTC_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN RTC_Init 2 */
+  /* First boot only: replace the generated 2000-01-01 with the project
+   * first-boot date and write the backup-register magic. */
+  rtc_time_first_boot();
 
   /* USER CODE END RTC_Init 2 */
 

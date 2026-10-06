@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "stlinkgdbtarget",
+            "request": "launch",
+            "name": "STM32Cube: Launch ST-Link GDB Server",
+            "origin": "snippet",
+            "cwd": "${workspaceFolder}",
+            // Explicit ELF path and build task instead of the extension's
+            // project-context commands. Device/core come from .settings/ide.store.json.
+            "preLaunchTask": "Build Debug",
+            "runEntry": "main",
+            // Read variables while the target runs (STM32Cube Live Watch panel).
+            "liveWatch": { "enabled": true, "samplesPerSecond": "4" },
+            // 1 MHz SWD: hot-plug at 4 MHz was unreliable on this ST-LINK.
+            "serverInterfaceFrequency": "1000",
+            "imagesAndSymbols": [
+                {
+                    "imageFileName": "${workspaceFolder}/build/Debug/asset_tracker.elf"
+                }
+            ]
+        }
+    ]
+}

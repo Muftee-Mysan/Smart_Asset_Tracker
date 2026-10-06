@@ -26,6 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "app_main.h"
 
 /* USER CODE END Includes */
 
@@ -95,6 +96,8 @@ int main(void)
   MX_RTC_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  app_init();
+  app_run();   /* never returns */
 
   /* USER CODE END 2 */
 

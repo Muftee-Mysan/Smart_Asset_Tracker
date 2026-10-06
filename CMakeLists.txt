@@ -45,17 +45,30 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    App/app_main.c
+    App/services/power.c
+    App/services/rtc_time.c
+    App/services/trace.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    App
+    App/drivers
+    App/services
 )
 
 # Add project symbols (macros)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
+    $<$<CONFIG:Debug>:APP_DEBUG=1>
 )
+
+# Extra warnings for Core/ and App/ sources only. The ST HAL (STM32_Drivers
+# object library) is left at the generated -Wall: -Wextra flags unused
+# parameters in stm32f4xx_hal_flash_ex.c that we must not edit.
+target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wextra)
 
 # Remove wrong libob.a library dependency when using cpp files
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
