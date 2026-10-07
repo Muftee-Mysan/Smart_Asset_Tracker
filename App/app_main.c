@@ -2,11 +2,15 @@
  * @file    app_main.c
  * @brief   app_init() and the main event loop.
  *
- * Phase 0: ISR flags -> counters, 10 ms tick, __WFI() between ticks.
- * The state machine (app_sm) and STOP mode come in later phases.
+ * ISRs only set flags. The loop turns them into events (CLAUDE.md 6.2):
+ * EV_RTC_WAKE, then every TICK_PERIOD_MS the debounced key events followed
+ * by EV_TICK, each run through the state machine in order. Between ticks
+ * the core idles in __WFI() (Release). STOP mode in ST_SLEEP is Phase 4.
  */
 #include "app_main.h"
+#include "app_sm.h"
 #include "bringup.h"
+#include "keypad.h"
 #include "config.h"
 #include "status.h"
 #include "main.h"
@@ -55,12 +59,15 @@ void app_run(void)
     bringup_run();
 #endif
 
+    app_sm_init();
     uint32_t last_tick = HAL_GetTick();
 
     for (;;) {
         if (rtc_time_take_wake_flag()) {
             g_app_dbg.rtc_wakes++;
             TRACE(TR_RTC_WAKE, g_app_dbg.rtc_wakes);
+            const app_event_t ev = { EV_RTC_WAKE, KEY_NONE };
+            app_sm_handle(&ev);
         }
 
         if (s_key_irq) {
@@ -70,8 +77,19 @@ void app_run(void)
         }
 
         if ((HAL_GetTick() - last_tick) >= TICK_PERIOD_MS) {
-            last_tick += TICK_PERIOD_MS;
+            /* No catch-up: an NFC attempt can block for tens of ms. */
+            last_tick = HAL_GetTick();
             g_app_dbg.heartbeat++;
+
+            key_event_t kev;
+            if (keypad_tick(&kev)) {
+                const app_event_t ev = {
+                    (kev.type == KEY_EV_DOWN) ? EV_KEY_DOWN : EV_KEY_UP, kev.key
+                };
+                app_sm_handle(&ev);
+            }
+            const app_event_t tick = { EV_TICK, KEY_NONE };
+            app_sm_handle(&tick);
 
             if ((g_app_dbg.heartbeat % UNIX_TIME_REFRESH_TICKS) == 0U) {
                 uint32_t now;

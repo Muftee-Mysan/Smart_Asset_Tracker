@@ -46,6 +46,10 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     App/app_main.c
+    App/app_sm.c
+    App/crc.c
+    App/ui.c
+    App/data/students_table.c
     App/bringup.c
     App/fmt.c
     App/drivers/delay.c
@@ -57,6 +61,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/drivers/pn532.c
     App/drivers/ssd1306.c
     App/services/battery.c
+    App/services/storage.c
+    App/services/students.c
     App/services/power.c
     App/services/rtc_time.c
     App/services/trace.c
@@ -74,6 +80,19 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined symbols
     $<$<CONFIG:Debug>:APP_DEBUG=1>
+)
+
+# Student table: regenerate App/data/students_table.c whenever the CSV or the
+# generator changes (CLAUDE.md 6.11).
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_custom_command(
+    OUTPUT ${CMAKE_SOURCE_DIR}/App/data/students_table.c
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/gen_students.py
+            ${CMAKE_SOURCE_DIR}/tools/students.csv
+            ${CMAKE_SOURCE_DIR}/App/data/students_table.c
+    DEPENDS ${CMAKE_SOURCE_DIR}/tools/students.csv ${CMAKE_SOURCE_DIR}/tools/gen_students.py
+    COMMENT "Generating students_table.c from tools/students.csv"
+    VERBATIM
 )
 
 # Extra warnings for Core/ and App/ sources only. The ST HAL (STM32_Drivers

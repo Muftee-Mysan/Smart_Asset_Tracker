@@ -48,3 +48,17 @@ status_t battery_read_mv(uint16_t *vdd_mv)
     *vdd_mv = (uint16_t)((VREFINT_CAL_VDD_MV * cal + raw / 2U) / raw);
     return STATUS_OK;
 }
+
+batt_level_t battery_check(uint16_t *vdd_mv)
+{
+    uint16_t mv = 0U;
+    if (battery_read_mv(&mv) != STATUS_OK) {
+        *vdd_mv = 0U;
+        return BATT_OK;
+    }
+    *vdd_mv = mv;
+    if (mv < BATTERY_CRITICAL_MV) {
+        return BATT_CRITICAL;
+    }
+    return (mv < BATTERY_OK_MV) ? BATT_LOW : BATT_OK;
+}

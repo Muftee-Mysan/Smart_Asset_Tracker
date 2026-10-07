@@ -1,5 +1,34 @@
 # Changelog
 
+## Phase 3 — Application (unreleased, FW 0.0)
+
+- `app_sm.c`: state machine per CLAUDE.md 6.3 (SLEEP, SCAN, STUDENT, ASSET, MSG,
+  ADMIN_PIN, ADMIN_MENU, CLEAR_CONFIRM, SET_TIME, INFO, READ_UID, plus FORMAT_CONFIRM
+  for an unreadable log). Wake key consumed; 'D' held 3 s opens the admin PIN.
+  Battery check on every wake before NFC. Log-full check refuses scans. PN532
+  PowerDown whenever scanning ends. All timeouts in `config.h`.
+- `ui.c`: one function per screen, status bar with title, low-battery mark and local
+  time ('?' while the clock is unset). Large text = 6x8 font at 2x (12x16) instead of
+  a separate 8x16 font (deviation from CLAUDE.md 6.1, same height).
+- `storage.c`: FRAM log per 6.7 — A/B headers with generation and CRC-32 (zlib),
+  24-byte records with CRC-16/CCITT-FALSE, append = write record, read back, then
+  header to the older copy; boot picks the newer valid header and rolls forward a
+  record written before a reset; blank FRAM is formatted automatically, a non-empty
+  one only after the user confirms; clear keeps next_seq.
+- `students.c` + `tools/gen_students.py` + `tools/students.csv`: CSV validated (8/14 hex
+  UID, unique, ID <= 11, name <= 20 ASCII), sorted, generated into
+  `App/data/students_table.c` by CMake whenever the CSV changes; binary search.
+- `rtc_time.c`: Unix <-> calendar (checked against Python datetime for 2000-2099),
+  set time, time_valid flag. `battery.c`: thresholds 3250 / 3000 mV.
+- Admin: 1 Export (placeholder until Phase 5), 2 Clear (double #), 3 Set time
+  (local YYMMDDhhmm, logs an 0xA2 sync record first), 4 Info, 5 Read UID.
+- Verified on the Black Pill (FRAM RAM emulator, records read back over SWD): full
+  transaction, delete key, cancel, 10 s / 20 s timeouts, wrong / right PIN, info,
+  set time (UTC conversion correct, sync record logged), read UID, clear (next_seq
+  kept: next save was #4), header A/B alternation, CRC-32 matches zlib.crc32.
+- Not tested yet: unregistered card (only one card available); reset during save
+  (needs real FRAM, moved to Phase 6a).
+
 ## Phase 2 — Drivers and error paths (unreleased, FW 0.0)
 
 - `i2c_bus`: bus recovery per CLAUDE.md 6.12 (de-init, up to 9 SCL pulses with SDA

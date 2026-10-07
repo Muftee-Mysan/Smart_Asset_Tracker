@@ -32,7 +32,7 @@
 /* Application mode. Phase 1 adds the bring-up test mode. */
 #define APP_MODE_NORMAL         0
 #define APP_MODE_BRINGUP        1
-#define APP_MODE                APP_MODE_BRINGUP
+#define APP_MODE                APP_MODE_NORMAL
 
 /* ------------------------------------------------------------------------- */
 /* Main loop                                                                  */
@@ -166,6 +166,38 @@
 #define BATTERY_SAMPLES         8U
 /* Bring-up: re-measure VDD this often (ms). */
 #define BRINGUP_VDD_PERIOD_MS   5000U
+
+/* Thresholds (CLAUDE.md 6.8), checked on every wake before NFC is used.
+ * >= OK: normal. OK..CRITICAL: "Battery low", continue. < CRITICAL:
+ * "Charge battery" and back to sleep. Low-battery icon below OK (mV). */
+#define BATTERY_OK_MV           3250U
+#define BATTERY_CRITICAL_MV     3000U
+
+/* ------------------------------------------------------------------------- */
+/* Application (CLAUDE.md 6.3)                                                */
+/* ------------------------------------------------------------------------- */
+
+/* Admin PIN (digits only). CHANGE BEFORE DEPLOYMENT. */
+#define ADMIN_PIN               "1234"
+#define ADMIN_PIN_MAX_LEN       8U
+
+/* Hold time of 'D' in sleep to open the admin PIN screen (ms). */
+#define ADMIN_LONGPRESS_MS      3000U
+
+/* Max digits in an asset ID (fits in uint32: 99 999 999). */
+#define ASSET_ID_MAX_DIGITS     8U
+
+/* State timeouts (ms). */
+#define SCAN_TIMEOUT_MS         10000U  /* no card -> sleep */
+#define STUDENT_SHOW_MS         1500U   /* name screen before asset entry */
+#define ASSET_IDLE_MS           20000U  /* no key during asset entry -> sleep */
+#define PIN_IDLE_MS             20000U  /* no key on the PIN screen -> sleep */
+#define ADMIN_IDLE_MS           30000U  /* no key in any admin screen -> sleep */
+#define MSG_SHORT_MS            1500U   /* "Saved #n", "Battery low" */
+#define MSG_LONG_MS             3000U   /* errors, "Unregistered card" */
+
+/* Show "Log nearly full" after a save at or above this fill level (%). */
+#define LOG_WARN_PERCENT        90U
 
 /* ------------------------------------------------------------------------- */
 /* Trace (Debug builds only)                                                  */

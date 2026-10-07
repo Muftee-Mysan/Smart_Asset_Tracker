@@ -69,6 +69,21 @@ bool rtc_time_take_wake_flag(void)
     return true;
 }
 
+/* Calendar date from days since 1970-01-01 (Hinnant's civil_from_days,
+ * unsigned because dates are never before 1970). */
+static void civil_from_days(uint32_t days, uint32_t *y, uint32_t *m, uint32_t *d)
+{
+    const uint32_t z = days + DAYS_0000_03_01_TO_EPOCH;
+    const uint32_t era = z / DAYS_PER_400_YEARS;
+    const uint32_t doe = z - era * DAYS_PER_400_YEARS;                    /* [0, 146096] */
+    const uint32_t yoe = (doe - doe / 1460U + doe / 36524U - doe / 146096U) / 365U;
+    const uint32_t doy = doe - (365U * yoe + yoe / 4U - yoe / 100U);      /* [0, 365] */
+    const uint32_t mp = (5U * doy + 2U) / 153U;                           /* March = 0 */
+    *d = doy - (153U * mp + 2U) / 5U + 1U;
+    *m = (mp < 10U) ? (mp + 3U) : (mp - 9U);
+    *y = yoe + era * 400U + ((*m <= 2U) ? 1U : 0U);
+}
+
 /* Days since 1970-01-01 for a date in 2000..2099 (Hinnant's days_from_civil,
  * reduced to unsigned arithmetic because the year is never before 2000). */
 static uint32_t days_from_civil(uint32_t y, uint32_t m, uint32_t d)
@@ -102,6 +117,79 @@ status_t rtc_time_now_unix(uint32_t *unix_out)
     const uint32_t days = days_from_civil(2000U + d.Year, d.Month, d.Date);
     *unix_out = days * SECONDS_PER_DAY + (uint32_t)t.Hours * 3600U
               + (uint32_t)t.Minutes * 60U + t.Seconds;
+    return STATUS_OK;
+}
+
+status_t rtc_time_set_unix(uint32_t unix)
+{
+    datetime_t dt;
+    rtc_time_to_datetime(unix, 0, &dt);
+    if ((dt.year < 2000U) || (dt.year > 2099U)) {
+        return STATUS_INVALID;
+    }
+    RTC_TimeTypeDef t = {0};
+    RTC_DateTypeDef d = {0};
+    t.Hours = dt.hour;
+    t.Minutes = dt.minute;
+    t.Seconds = dt.second;
+    t.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    t.StoreOperation = RTC_STOREOPERATION_RESET;
+    d.Year = (uint8_t)(dt.year - 2000U);
+    d.Month = dt.month;
+    d.Date = dt.day;
+    /* HAL weekday: Monday = 1 .. Sunday = 7; 1970-01-01 was a Thursday. */
+    d.WeekDay = (uint8_t)(((unix / SECONDS_PER_DAY) + 3U) % 7U + 1U);
+    HAL_StatusTypeDef hs = HAL_RTC_SetTime(&hrtc, &t, RTC_FORMAT_BIN);
+    if (hs == HAL_OK) {
+        hs = HAL_RTC_SetDate(&hrtc, &d, RTC_FORMAT_BIN);
+    }
+    return status_from_hal(hs);
+}
+
+bool rtc_time_is_valid(void)
+{
+    return HAL_RTCEx_BKUPRead(&hrtc, RTC_BKP_IDX_TIME_VALID) == 1U;
+}
+
+void rtc_time_mark_valid(void)
+{
+    HAL_PWR_EnableBkUpAccess();
+    HAL_RTCEx_BKUPWrite(&hrtc, RTC_BKP_IDX_TIME_VALID, 1U);
+}
+
+void rtc_time_to_datetime(uint32_t unix, int32_t offset_min, datetime_t *dt)
+{
+    const uint32_t t = (uint32_t)((int64_t)unix + (int64_t)offset_min * 60);
+    const uint32_t days = t / SECONDS_PER_DAY;
+    const uint32_t sod = t % SECONDS_PER_DAY;
+    uint32_t y;
+    uint32_t m;
+    uint32_t d;
+    civil_from_days(days, &y, &m, &d);
+    dt->year = (uint16_t)y;
+    dt->month = (uint8_t)m;
+    dt->day = (uint8_t)d;
+    dt->hour = (uint8_t)(sod / 3600U);
+    dt->minute = (uint8_t)((sod / 60U) % 60U);
+    dt->second = (uint8_t)(sod % 60U);
+}
+
+status_t rtc_time_from_datetime(const datetime_t *dt, int32_t offset_min, uint32_t *unix)
+{
+    static const uint8_t mdays[12] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    if ((dt->year < 2000U) || (dt->year > 2099U) || (dt->month < 1U) || (dt->month > 12U) ||
+        (dt->day < 1U) || (dt->day > mdays[dt->month - 1U]) || (dt->hour > 23U) ||
+        (dt->minute > 59U) || (dt->second > 59U)) {
+        return STATUS_INVALID;
+    }
+    /* 29 February only in leap years (every 4th year in 2000..2099). */
+    if ((dt->month == 2U) && (dt->day == 29U) && ((dt->year % 4U) != 0U)) {
+        return STATUS_INVALID;
+    }
+    const uint32_t local = days_from_civil(dt->year, dt->month, dt->day) * SECONDS_PER_DAY +
+                           (uint32_t)dt->hour * 3600U + (uint32_t)dt->minute * 60U +
+                           dt->second;
+    *unix = (uint32_t)((int64_t)local - (int64_t)offset_min * 60);
     return STATUS_OK;
 }
 
