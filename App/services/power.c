@@ -20,6 +20,7 @@
 #include "rtc.h"
 #include "rtc_time.h"
 #include "stm32f4xx_hal.h"
+#include "watchdog.h"
 
 static uint32_t s_stops;
 static uint32_t s_key_wakes;
@@ -39,6 +40,35 @@ void power_debug_config(void)
     HAL_DBGMCU_DisableDBGStopMode();
     HAL_DBGMCU_DisableDBGStandbyMode();
 #endif
+}
+
+void power_debug_enable(void)
+{
+    HAL_DBGMCU_EnableDBGSleepMode();
+    HAL_DBGMCU_EnableDBGStopMode();
+    HAL_DBGMCU_EnableDBGStandbyMode();
+}
+
+uint8_t power_check_bor(void)
+{
+    FLASH_OBProgramInitTypeDef ob = {0};
+    HAL_FLASHEx_OBGetConfig(&ob);
+#if APP_SET_BOR_LEVEL3
+    /* VBOR3 ~2.92 V rising protects FRAM writes (MB85RC256V min 2.7 V). */
+    if (ob.BORLevel != OB_BOR_LEVEL3) {
+        FLASH_OBProgramInitTypeDef prog = {0};
+        prog.OptionType = OPTIONBYTE_BOR;
+        prog.BORLevel = OB_BOR_LEVEL3;
+        if ((HAL_FLASH_Unlock() == HAL_OK) && (HAL_FLASH_OB_Unlock() == HAL_OK) &&
+            (HAL_FLASHEx_OBProgram(&prog) == HAL_OK)) {
+            (void)HAL_FLASH_OB_Launch();
+            NVIC_SystemReset();             /* boot again with the new level */
+        }
+        (void)HAL_FLASH_OB_Lock();
+        (void)HAL_FLASH_Lock();
+    }
+#endif
+    return (uint8_t)ob.BORLevel;
 }
 
 bool power_stop_allowed(void)
@@ -76,8 +106,9 @@ void power_sleep_until_key(void)
         if (keypad_take_irq_flag()) {
             break;                              /* key wake */
         }
+        watchdog_kick();                        /* step 9: every wake kicks */
         if (rtc_time_take_wake_flag()) {
-            s_rtc_wakes++;                      /* step 9: IWDG kick in Phase 5 */
+            s_rtc_wakes++;
         }
     }
 

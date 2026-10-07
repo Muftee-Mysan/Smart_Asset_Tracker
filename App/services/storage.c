@@ -244,6 +244,14 @@ bool storage_is_nearly_full(void)
            ((s_hdr.record_count * 100U) >= (LOG_CAPACITY * LOG_WARN_PERCENT));
 }
 
+status_t storage_read_raw(uint32_t index, uint32_t n, log_record_t *out)
+{
+    if ((s_state != STORAGE_READY) || (index + n > s_hdr.record_count)) {
+        return STATUS_INVALID;
+    }
+    return fram_read(rec_addr(index), (uint8_t *)out, (uint16_t)(n * LOG_RECORD_SIZE));
+}
+
 status_t storage_read(uint32_t index, log_record_t *rec)
 {
     if ((s_state != STORAGE_READY) || (index >= s_hdr.record_count)) {

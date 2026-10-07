@@ -13,6 +13,7 @@
 #include <string.h>
 #include "battery.h"
 #include "config.h"
+#include "export.h"
 #include "fmt.h"
 #include "fram.h"
 #include "i2c_bus.h"
@@ -27,6 +28,7 @@
 #include "students.h"
 #include "trace.h"
 #include "ui.h"
+#include "watchdog.h"
 
 #define BOOT_SCREEN_MS      2000U
 #define SET_TIME_DIGITS     10U     /* YYMMDDhhmm */
@@ -45,6 +47,7 @@ typedef enum {
     ST_INFO,
     ST_READ_UID,
     ST_FORMAT_CONFIRM,
+    ST_EXPORT,
 } state_t;
 
 typedef enum {
@@ -75,6 +78,7 @@ static const student_t *s_student;
 static char s_buf[BUF_LEN];         /* asset ID, PIN or time digits */
 static uint8_t s_len;
 static bool s_clear_second;
+static uint8_t s_bor_level;         /* option-byte BOR level read at boot */
 
 static void enter(state_t next);
 
@@ -247,6 +251,52 @@ static void save_scan(void)
     }
 }
 
+/* Any time sync (admin menu or host mailbox, CLAUDE.md 6.9 / 7.1): append a
+ * 0xA2 record whose rtc_time is the clock just before it is set, then set
+ * the RTC and mark the time valid. *logged = sync record written. */
+static status_t time_sync(uint32_t new_unix, bool *logged)
+{
+    log_record_t rec;
+    memset(&rec, 0, sizeof(rec));
+    rec.type = REC_TYPE_SYNC;
+    rec.flags = rtc_time_is_valid() ? REC_FLAG_TIME_VALID : 0U;
+    uint32_t before = 0U;
+    (void)rtc_time_now_unix(&before);
+    rec.rtc_time = before;
+    rec.value = new_unix;
+    *logged = (storage_append(&rec, NULL) == STATUS_OK);
+
+    const status_t st = rtc_time_set_unix(new_unix);
+    if (st == STATUS_OK) {
+        rtc_time_mark_valid();
+    }
+    return st;
+}
+
+static void show_export(const char *status)
+{
+    ui_export(g_export.record_count, (uint32_t)&g_export, status);
+}
+
+/* Host time sync in export mode (CLAUDE.md 7.1 steps 1-5). */
+static void export_poll(void)
+{
+    uint32_t host_unix = 0U;
+    if (!export_peek_time_request(&host_unix)) {
+        return;
+    }
+    bool logged = false;
+    const status_t st = time_sync(host_unix, &logged);  /* steps 1-2 */
+    export_clear_time_request();                        /* step 3 */
+    (void)export_refresh();                             /* step 4 */
+    s_last_input = HAL_GetTick();
+    if (st != STATUS_OK) {
+        show_export("Time sync FAILED");
+    } else {
+        show_export(logged ? "Time synced" : "Synced, log FAILED");  /* step 5 */
+    }
+}
+
 /* Sets the RTC from the entered local time and logs a sync record. */
 static void set_time(void)
 {
@@ -264,25 +314,12 @@ static void set_time(void)
         msg("Invalid", "Check date and time", MSG_SHORT_MS, ST_SET_TIME);
         return;
     }
-
-    /* Sync record first: rtc_time = clock just before it is set. */
-    log_record_t rec;
-    memset(&rec, 0, sizeof(rec));
-    rec.type = REC_TYPE_SYNC;
-    rec.flags = rtc_time_is_valid() ? REC_FLAG_TIME_VALID : 0U;
-    uint32_t before = 0U;
-    (void)rtc_time_now_unix(&before);
-    rec.rtc_time = before;
-    rec.value = new_unix;
-    const status_t log_st = storage_append(&rec, NULL);
-
-    if (rtc_time_set_unix(new_unix) != STATUS_OK) {
+    bool logged = false;
+    if (time_sync(new_unix, &logged) != STATUS_OK) {
         msg("Error", "Set time failed", MSG_LONG_MS, ST_ADMIN_MENU);
         return;
     }
-    rtc_time_mark_valid();
-    msg("Time set", (log_st == STATUS_OK) ? NULL : "Sync log failed", MSG_SHORT_MS,
-        ST_ADMIN_MENU);
+    msg("Time set", logged ? NULL : "Sync log failed", MSG_SHORT_MS, ST_ADMIN_MENU);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -293,6 +330,9 @@ static void enter(state_t next)
 {
     if ((next != ST_SCAN) && (next != ST_READ_UID)) {
         nfc_stop();                     /* PowerDown whenever scanning ends */
+    }
+    if ((s_state == ST_EXPORT) && (next != ST_EXPORT)) {
+        power_debug_config();           /* Release: debug bits off again */
     }
     s_state = next;
     s_entered = HAL_GetTick();
@@ -339,8 +379,9 @@ static void enter(state_t next)
     case ST_INFO: {
         uint16_t mv = 0U;
         (void)battery_read_mv(&mv);
-        ui_info(storage_count(), LOG_CAPACITY, mv, 0U,    /* LSI: Phase 5 */
-                power_key_wake_count(), power_stop_count(), power_rtc_wake_count());
+        ui_info(storage_count(), LOG_CAPACITY, mv, rtc_time_lsi_hz(),
+                power_key_wake_count(), power_stop_count(), power_rtc_wake_count(),
+                s_bor_level);
         break;
     }
     case ST_READ_UID:
@@ -350,6 +391,12 @@ static void enter(state_t next)
     case ST_FORMAT_CONFIRM:
         (void)ui_on();
         ui_message("Log error", "#=format  *=skip");
+        break;
+    case ST_EXPORT:
+        /* Debugger must stay attached: debug bits on, no WFI/STOP here
+         * (the main loop busy-waits, see app_sm_in_export()). */
+        power_debug_enable();
+        show_export((export_refresh() == STATUS_OK) ? "Waiting for PC" : "Read FAILED");
         break;
     default:
         break;
@@ -478,7 +525,7 @@ static void on_admin_menu(const app_event_t *ev)
     }
     switch (ev->key) {
     case '1':
-        msg("Export", "Not yet (Phase 5)", MSG_SHORT_MS, ST_ADMIN_MENU);
+        enter(ST_EXPORT);
         break;
     case '2':
         enter(ST_CLEAR_CONFIRM);
@@ -583,6 +630,9 @@ static void on_format_confirm(const app_event_t *ev)
 
 void app_sm_init(void)
 {
+    s_bor_level = power_check_bor();            /* may reset once (6.10) */
+    watchdog_start();                           /* CLAUDE.md 6.10 */
+    (void)rtc_time_calibrate_lsi();             /* 6.9: at boot */
     i2c_bus_init();
     (void)i2c_bus_set_speed(I2C_SPEED_HZ);     /* 400 kHz from here on */
     keypad_awake_config();
@@ -607,7 +657,10 @@ void app_sm_init(void)
         ui_set_low_battery(battery_check(&mv) != BATT_OK);
         ui_boot(fram_txt, s_nfc_ready ? "OK" : "ERROR", storage_count(), g_student_count);
         (void)ui_flush();
-        HAL_Delay(BOOT_SCREEN_MS);
+        for (uint32_t t = 0U; t < BOOT_SCREEN_MS; t += 100U) {
+            watchdog_kick();                    /* blocking waits > 1 s kick */
+            HAL_Delay(100U);
+        }
     }
 
     if (sst == STORAGE_NEEDS_FORMAT) {
@@ -676,6 +729,16 @@ void app_sm_handle(const app_event_t *ev)
     case ST_FORMAT_CONFIRM:
         on_format_confirm(ev);
         break;
+    case ST_EXPORT:
+        if ((ev->type == EV_KEY_DOWN) && (ev->key == '*')) {
+            enter(ST_SLEEP);
+        } else if (ev->type == EV_TICK) {
+            export_poll();
+            if (elapsed(s_last_input) >= EXPORT_TIMEOUT_MS) {
+                enter(ST_SLEEP);
+            }
+        }
+        break;
     default:
         enter(ST_SLEEP);
         break;
@@ -687,6 +750,11 @@ void app_sm_handle(const app_event_t *ev)
         led_set(ui_is_on());
     }
     (void)ui_flush();
+}
+
+bool app_sm_in_export(void)
+{
+    return s_state == ST_EXPORT;
 }
 
 bool app_sm_is_sleeping(void)

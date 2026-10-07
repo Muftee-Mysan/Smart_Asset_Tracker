@@ -60,7 +60,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/drivers/led.c
     App/drivers/pn532.c
     App/drivers/ssd1306.c
+    App/drivers/watchdog.c
     App/services/battery.c
+    App/services/export.c
     App/services/storage.c
     App/services/students.c
     App/services/power.c

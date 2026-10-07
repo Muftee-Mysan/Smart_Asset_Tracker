@@ -18,6 +18,7 @@
 #include "power.h"
 #include "rtc_time.h"
 #include "trace.h"
+#include "watchdog.h"
 
 /* Refresh g_app_dbg.unix_time every this many ticks (100 ms). */
 #define UNIX_TIME_REFRESH_TICKS  10U
@@ -62,6 +63,7 @@ void app_run(void)
     uint32_t last_tick = HAL_GetTick();
 
     for (;;) {
+        watchdog_kick();
         if (rtc_time_take_wake_flag()) {
             g_app_dbg.rtc_wakes++;
             TRACE(TR_RTC_WAKE, g_app_dbg.rtc_wakes);
@@ -103,13 +105,17 @@ void app_run(void)
             g_app_dbg.stop_count = power_stop_count();
             g_app_dbg.key_wakes = power_key_wake_count();
             g_app_dbg.rtc_only_wakes = power_rtc_wake_count();
+            rtc_time_calibrate_if_due();        /* 6.9: on wake, at most hourly */
             last_tick = HAL_GetTick() - TICK_PERIOD_MS;   /* scan keys now */
             continue;
         }
 
 #if APP_IDLE_USE_WFI
-        /* Sleep until the next interrupt (SysTick at the latest, 1 ms). */
-        __WFI();
+        /* Sleep until the next interrupt (SysTick at the latest, 1 ms).
+         * Never in export mode: SWD reads return zeros during WFI. */
+        if (!app_sm_in_export()) {
+            __WFI();
+        }
 #endif
     }
 }

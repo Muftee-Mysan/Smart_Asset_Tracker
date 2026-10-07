@@ -80,6 +80,10 @@ bool storage_is_full(void);
 /* True at or above LOG_WARN_PERCENT. */
 bool storage_is_nearly_full(void);
 
+/* Reads `n` records starting at `index` as stored, without CRC checks
+ * (export copies the raw log; the host verifies). */
+status_t storage_read_raw(uint32_t index, uint32_t n, log_record_t *out);
+
 /* Reads record `index` (0-based) and checks its CRC. */
 status_t storage_read(uint32_t index, log_record_t *rec);
 

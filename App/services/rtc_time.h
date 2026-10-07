@@ -29,6 +29,18 @@ bool rtc_time_was_first_boot(void);
  * was already set (CLAUDE.md section 4.2). */
 status_t rtc_time_init(void);
 
+/* Measures LSI with TIM5 CH4 input capture and, if it changed, sets the RTC
+ * synchronous prescaler to lsi_hz/128 - 1 without resetting the calendar
+ * (CLAUDE.md 6.9). Takes ~2 ms. */
+status_t rtc_time_calibrate_lsi(void);
+
+/* Runs rtc_time_calibrate_lsi() if LSI_CAL_PERIOD_S passed since the last
+ * successful calibration (RTC time, so STOP periods count). */
+void rtc_time_calibrate_if_due(void);
+
+/* Last measured LSI frequency (Hz), 0 if never measured. */
+uint32_t rtc_time_lsi_hz(void);
+
 /* Returns and clears the "RTC wake-up fired" flag set by the ISR callback. */
 bool rtc_time_take_wake_flag(void);
 

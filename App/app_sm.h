@@ -26,6 +26,10 @@ void app_sm_init(void);
 /* Runs one event through the state machine and flushes the display. */
 void app_sm_handle(const app_event_t *ev);
 
+/* True in ST_EXPORT: the main loop must not use WFI or STOP, so the host
+ * can read RAM over SWD (deviation from CLAUDE.md 7.1, see CHANGELOG). */
+bool app_sm_in_export(void);
+
 /* True in ST_SLEEP (Phase 4 enters STOP mode there). */
 bool app_sm_is_sleeping(void);
 

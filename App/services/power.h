@@ -12,6 +12,17 @@
  * Release builds: clear those bits (export mode sets them again, Phase 5). */
 void power_debug_config(void);
 
+/* Export mode: DBGMCU SLEEP/STOP/STANDBY bits on in every build so the host
+ * can attach (CLAUDE.md 6.10). power_debug_config() restores the build
+ * default. */
+void power_debug_enable(void);
+
+/* BOR (CLAUDE.md 6.10): reads the option bytes and, when
+ * APP_SET_BOR_LEVEL3 is 1 and the level is not 3 yet, programs
+ * OB_BOR_LEVEL3 and resets (one time). Returns the current BOR level as
+ * read (OB_BOR_LEVEL1..3 or OB_BOR_OFF). */
+uint8_t power_check_bor(void);
+
 /* True once STOP is allowed: always in Release, after DEBUG_STOP_DELAY_MS
  * from reset in Debug builds. */
 bool power_stop_allowed(void);

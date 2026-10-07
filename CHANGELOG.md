@@ -1,5 +1,36 @@
 # Changelog
 
+## Phase 5 — Export, time, safety (unreleased, FW 0.0)
+
+- Export mode (admin 1, CLAUDE.md 7.1): `g_export` (36-byte header + all records,
+  CRC-32 over the records) and `g_time_sync_mailbox`. Host time sync: sync record,
+  set RTC, mark valid, clear magic, refresh (generation + 1), "Time synced". Leaves
+  on '*' or after 10 min.
+- **Deviation from 7.1:** export mode busy-waits instead of idling in `__WFI()`.
+  SWD reads return zeros while the core sleeps in WFI on this hardware (Phase 0), so
+  the host would read an empty buffer. DBGMCU debug bits are on in export mode in all
+  builds and restored on exit.
+- `tools/export_log.py`: symbols from the ELF via `arm-none-eabi-nm`, hot-plug attach
+  at 1 MHz, mailbox write (time, then magic), waits for the generation to change,
+  uploads with `-u`, checks magic/version/CRC-32 (zlib), decodes and checks each
+  record's CRC-16, joins `students.csv`, drift correction between sync records
+  (corrected / extrapolated / unsynced / uncorrected when the reference sync was
+  cleared), writes `asset_log_<YYYYmmdd_HHMM>.csv`. `--no-sync` reads without setting
+  the clock. Default ELF: the newer of build/Release and build/Debug (the spec says
+  Release; the newer one is what is most likely on the device).
+- LSI calibration (6.9): TIM5 CH4 input capture on LSI (remap, IC prescaler 8, 4
+  captures), RTC sync prescaler set to round(LSI/128) - 1 only when it changes; at boot
+  and on a key wake at most hourly. Info screen shows LSI Hz.
+- IWDG (6.10): prescaler 256, reload 4095, frozen when the core is halted; kicked in
+  the main loop, on every STOP wake (RTC every 10 s), and during long boot/export
+  waits. Started in normal mode only (bring-up mode does not kick it).
+- BOR level 3 (6.10): `power_check_bor()` reads the option bytes; programming is
+  behind `APP_SET_BOR_LEVEL3` (default 0). Info screen shows the BOR level.
+- Verified on the Black Pill: LSI measured 35 435 Hz (11 % above nominal: the RTC
+  had been gaining ~2.6 h/day before calibration); export of 2 then 5 records, CRC
+  OK, time sync logged and applied, a scan between two syncs came out "corrected".
+- Not done (user's choice): overnight IWDG test; BOR level 3 left off (reads "off").
+
 ## Phase 4 — Low power (unreleased, FW 0.0)
 
 - `power.c`: `power_sleep_until_key()` follows CLAUDE.md 6.10: I2C1 off with pins

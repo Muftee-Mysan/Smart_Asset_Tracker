@@ -288,7 +288,7 @@ void ui_set_time(const char *digits)
 }
 
 void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz,
-             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes)
+             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes, uint8_t bor_level)
 {
     char b[LINE_CHARS + 1U];
     fmt_t f;
@@ -340,6 +340,10 @@ void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz
     fmt_u32(&f, FW_VERSION_MAJOR);
     fmt_char(&f, '.');
     fmt_u32(&f, FW_VERSION_MINOR);
+    /* Option-byte BOR field: 0x00 = level 3, 0x04 = 2, 0x08 = 1, 0x0C = off. */
+    fmt_str(&f, "  BOR ");
+    fmt_str(&f, (bor_level == 0x00U) ? "3" : (bor_level == 0x04U) ? "2" :
+                (bor_level == 0x08U) ? "1" : "off");
     text(5U, b);
 
     fmt_init(&f, b, sizeof(b));
@@ -351,6 +355,27 @@ void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz
     fmt_u32(&f, rtc_wakes);
     text(6U, b);
     text(PAGE_LAST, "Any key=back");
+}
+
+void ui_export(uint32_t count, uint32_t addr, const char *status)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    char b[LINE_CHARS + 1U];
+    fmt_t f;
+    screen("EXPORT");
+    text_centre(1U, "EXPORT MODE", 1U);
+    fmt_init(&f, b, sizeof(b));
+    fmt_str(&f, "Records: ");
+    fmt_u32(&f, count);
+    text(3U, b);
+    fmt_init(&f, b, sizeof(b));
+    fmt_str(&f, "Addr: 0x");
+    for (int32_t sh = 28; sh >= 0; sh -= 4) {
+        fmt_char(&f, hex[(addr >> (uint32_t)sh) & 0xFU]);
+    }
+    text(4U, b);
+    text(5U, status);
+    text(PAGE_LAST, "* to exit");
 }
 
 void ui_read_uid(const uint8_t *uid, uint8_t uid_len, const student_t *s)

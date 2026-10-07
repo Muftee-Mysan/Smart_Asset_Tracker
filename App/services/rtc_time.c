@@ -5,6 +5,7 @@
 #include "rtc_time.h"
 #include "config.h"
 #include "rtc.h"
+#include "tim.h"
 
 /* Days between 0000-03-01 and 1970-01-01 in the proleptic Gregorian calendar
  * (H. Hinnant, "chrono-compatible low-level date algorithms"). */
@@ -12,7 +13,15 @@
 #define DAYS_PER_400_YEARS          146097UL
 #define SECONDS_PER_DAY             86400UL
 
+/* LSI calibration: TIM5 counts at 16 MHz (APB1 = HSI / 1, timer clock x1). */
+#define TIM5_CLOCK_HZ               16000000UL
+#define LSI_EDGES_PER_CAPTURE       8U      /* IC prescaler DIV8 */
+#define RTC_ASYNC_PREDIV            127U
+#define LSI_CAPTURE_TIMEOUT_MS      5U
+
 static bool s_first_boot;
+static uint32_t s_lsi_hz;
+static uint32_t s_last_cal_unix;
 static volatile bool s_wake_flag;
 
 bool rtc_time_is_initialised(void)
@@ -58,6 +67,89 @@ status_t rtc_time_init(void)
      * Also enables the wake-up interrupt and EXTI line 22 (rising edge). */
     return status_from_hal(HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, RTC_WAKEUP_PERIOD_S - 1U,
                                                        RTC_WAKEUPCLOCK_CK_SPRE_16BITS));
+}
+
+static status_t wait_capture(uint32_t *ccr)
+{
+    const uint32_t start = HAL_GetTick();
+    while (__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_CC4) == RESET) {
+        if ((HAL_GetTick() - start) > LSI_CAPTURE_TIMEOUT_MS) {
+            return STATUS_TIMEOUT;
+        }
+    }
+    *ccr = HAL_TIM_ReadCapturedValue(&htim5, TIM_CHANNEL_4);   /* clears CC4IF */
+    return STATUS_OK;
+}
+
+status_t rtc_time_calibrate_lsi(void)
+{
+    /* TIM5 CH4 input = LSI (internal remap, no pin), rising edge, capture
+     * every 8th edge (CLAUDE.md 4.2). */
+    TIM_IC_InitTypeDef ic = {0};
+    ic.ICPolarity = TIM_ICPOLARITY_RISING;
+    ic.ICSelection = TIM_ICSELECTION_DIRECTTI;
+    ic.ICPrescaler = TIM_ICPSC_DIV8;
+    ic.ICFilter = 0U;
+    status_t st = status_from_hal(HAL_TIMEx_RemapConfig(&htim5, TIM_TIM5_LSI));
+    if (st == STATUS_OK) {
+        st = status_from_hal(HAL_TIM_IC_ConfigChannel(&htim5, &ic, TIM_CHANNEL_4));
+    }
+    if (st == STATUS_OK) {
+        st = status_from_hal(HAL_TIM_IC_Start(&htim5, TIM_CHANNEL_4));
+    }
+
+    uint32_t first = 0U;
+    uint32_t last = 0U;
+    if (st == STATUS_OK) {
+        __HAL_TIM_CLEAR_FLAG(&htim5, TIM_FLAG_CC4);
+        st = wait_capture(&first);
+    }
+    for (uint32_t i = 0U; (st == STATUS_OK) && (i < LSI_CAL_CAPTURES); i++) {
+        st = wait_capture(&last);
+    }
+    (void)HAL_TIM_IC_Stop(&htim5, TIM_CHANNEL_4);   /* TIM5 off before sleep */
+    if (st != STATUS_OK) {
+        return st;
+    }
+
+    const uint32_t ticks = last - first;            /* 32-bit counter wraps fine */
+    if (ticks == 0U) {
+        return STATUS_INVALID;
+    }
+    const uint64_t edges = (uint64_t)LSI_EDGES_PER_CAPTURE * LSI_CAL_CAPTURES;
+    const uint32_t hz = (uint32_t)((edges * TIM5_CLOCK_HZ + ticks / 2U) / ticks);
+    if ((hz < LSI_MIN_HZ) || (hz > LSI_MAX_HZ)) {
+        return STATUS_INVALID;
+    }
+    s_lsi_hz = hz;
+
+    /* 1 Hz calendar: (async + 1) * (sync + 1) = LSI. Rewriting PRER enters
+     * init mode, which restarts the sub-second counter, so only do it when
+     * the value changes. */
+    const uint32_t sync = (hz + (RTC_ASYNC_PREDIV + 1U) / 2U) / (RTC_ASYNC_PREDIV + 1U) - 1U;
+    if (sync != hrtc.Init.SynchPrediv) {
+        hrtc.Init.AsynchPrediv = RTC_ASYNC_PREDIV;
+        hrtc.Init.SynchPrediv = sync;
+        st = status_from_hal(HAL_RTC_Init(&hrtc));  /* keeps calendar and WUT */
+    }
+    if (st == STATUS_OK) {
+        (void)rtc_time_now_unix(&s_last_cal_unix);
+    }
+    return st;
+}
+
+void rtc_time_calibrate_if_due(void)
+{
+    uint32_t now = 0U;
+    if ((s_lsi_hz == 0U) ||
+        ((rtc_time_now_unix(&now) == STATUS_OK) && ((now - s_last_cal_unix) >= LSI_CAL_PERIOD_S))) {
+        (void)rtc_time_calibrate_lsi();
+    }
+}
+
+uint32_t rtc_time_lsi_hz(void)
+{
+    return s_lsi_hz;
 }
 
 bool rtc_time_take_wake_flag(void)

@@ -47,7 +47,9 @@ void ui_clear_confirm(uint32_t count, bool second_press);
 void ui_set_time(const char *digits);
 /* Info screen. Last line: key wakes, STOP entries, RTC-only wakes. */
 void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz,
-             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes);
+             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes, uint8_t bor_level);
+/* Export mode: record count, &g_export, status line, "* to exit". */
+void ui_export(uint32_t count, uint32_t addr, const char *status);
 void ui_read_uid(const uint8_t *uid, uint8_t uid_len, const student_t *s);
 
 #endif /* APP_UI_H */

@@ -74,6 +74,34 @@
 /* Local time offset for display only (minutes). +330 = Sri Lanka (UTC+5:30). */
 #define TZ_OFFSET_MIN           330
 
+/* LSI calibration (CLAUDE.md 6.9): at boot, and on a key wake when this
+ * long has passed since the last one (s). */
+#define LSI_CAL_PERIOD_S        3600U
+/* LSI periods averaged per calibration (each capture spans 8 LSI edges). */
+#define LSI_CAL_CAPTURES        4U
+/* Accept a measurement only inside the datasheet LSI range (Hz). */
+#define LSI_MIN_HZ              17000U
+#define LSI_MAX_HZ              47000U
+
+/* ------------------------------------------------------------------------- */
+/* Watchdog and BOR                                                           */
+/* ------------------------------------------------------------------------- */
+
+/* IWDG reload with prescaler 256: 4096 * 256 / 32 kHz = ~32 s (6.10). */
+#define IWDG_RELOAD             4095U
+
+/* 1 = at boot, program BOR level 3 (VBOR3 ~2.92 V rising) if not set yet.
+ * One-time option-byte write; the device resets once. Enable only after the
+ * user has agreed (CLAUDE.md 5.7, 6.10). */
+#define APP_SET_BOR_LEVEL3      0
+
+/* ------------------------------------------------------------------------- */
+/* Export (CLAUDE.md 7)                                                       */
+/* ------------------------------------------------------------------------- */
+
+/* Leave export mode after this long (ms). */
+#define EXPORT_TIMEOUT_MS       600000U
+
 /* ------------------------------------------------------------------------- */
 /* I2C bus (I2C1)                                                             */
 /* ------------------------------------------------------------------------- */
