@@ -18,6 +18,16 @@ typedef struct {
     uint8_t support;    /* bit0 ISO14443A, bit1 ISO14443B, bit2 ISO18092 */
 } pn532_fw_t;
 
+/* Boot sequence (CLAUDE.md 6.5): GetFirmwareVersion (retried once, the first
+ * command after power-up may fail), SAMConfiguration, MaxRetries
+ * (PN532_PASSIVE_RETRIES), RF field off, PowerDown. Fills *fw when given. */
+status_t pn532_init(pn532_fw_t *fw);
+
+/* PowerDown with I2C as the only wake-up source (UM0701-02 7.2.11). The
+ * next command wakes the chip; its first frame may be NACKed and is
+ * retried. */
+status_t pn532_power_down(void);
+
 /* GetFirmwareVersion (UM0701-02 7.2.2). */
 status_t pn532_get_firmware(pn532_fw_t *fw);
 

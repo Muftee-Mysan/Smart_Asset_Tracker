@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     App/app_main.c
     App/bringup.c
     App/fmt.c
+    App/drivers/delay.c
     App/drivers/font.c
     App/drivers/fram.c
     App/drivers/i2c_bus.c

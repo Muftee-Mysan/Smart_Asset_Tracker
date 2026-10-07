@@ -26,6 +26,17 @@
 #define CMD_SAM_CONFIG      0x14U
 #define CMD_RF_CONFIG       0x32U
 #define CMD_IN_LIST_PASSIVE 0x4AU
+#define CMD_POWER_DOWN      0x16U
+
+/* PowerDown WakeUpEnable bits (UM0701-02 7.2.11): bit 7 = I2C. RF level
+ * detector (bit 3) stays off: it costs extra current (CLAUDE.md 6.5). */
+#define WAKEUP_I2C          0x80U
+/* "The PN532 needs approximately 1 ms to get into Power Down mode, after the
+ * command response" (7.2.11): wait before the next command. */
+#define POWER_DOWN_SETTLE_MS 2U
+
+/* Status byte (UM0701-02 7.1): bits 0-5 = error code, 0 = success. */
+#define STATUS_ERROR_CODE_MASK 0x3FU
 
 #define RF_ITEM_FIELD       0x01U
 #define RF_ITEM_MAX_RETRIES 0x05U
@@ -173,10 +184,19 @@ static status_t command(uint8_t cmd, const uint8_t *params, uint8_t plen,
                         uint32_t timeout_ms)
 {
     uint8_t step = STEP_WRITE;
-    status_t st = write_frame(cmd, params, plen);
-    if (st == STATUS_OK) {
-        step = STEP_ACK;
-        st = read_ack();
+    status_t st = STATUS_ERROR;
+    /* Two tries for the command + ACK: a frame sent while the chip wakes
+     * from PowerDown can be lost. */
+    for (uint32_t attempt = 0U; attempt < 2U; attempt++) {
+        step = STEP_WRITE;
+        st = write_frame(cmd, params, plen);
+        if (st == STATUS_OK) {
+            step = STEP_ACK;
+            st = read_ack();
+        }
+        if (st == STATUS_OK) {
+            break;
+        }
     }
     if (st == STATUS_OK) {
         step = STEP_RESP;
@@ -187,6 +207,43 @@ static status_t command(uint8_t cmd, const uint8_t *params, uint8_t plen,
     }
     if (st != STATUS_OK) {
         TRACE(TR_PN532_ERROR, ((uint32_t)step << 16) | (uint32_t)st);
+    }
+    return st;
+}
+
+status_t pn532_power_down(void)
+{
+    const uint8_t p[] = { WAKEUP_I2C };
+    uint8_t r[1];
+    uint8_t rlen = 0U;
+    status_t st = command(CMD_POWER_DOWN, p, (uint8_t)sizeof(p), r, (uint8_t)sizeof(r), &rlen,
+                          PN532_RESP_TIMEOUT_MS);
+    if ((st == STATUS_OK) && ((rlen != 1U) || ((r[0] & STATUS_ERROR_CODE_MASK) != 0U))) {
+        st = STATUS_ERROR;
+    }
+    HAL_Delay(POWER_DOWN_SETTLE_MS);
+    return st;
+}
+
+status_t pn532_init(pn532_fw_t *fw)
+{
+    pn532_fw_t tmp;
+    pn532_fw_t *f = (fw != NULL) ? fw : &tmp;
+    status_t st = pn532_get_firmware(f);
+    if (st != STATUS_OK) {
+        st = pn532_get_firmware(f);
+    }
+    if (st == STATUS_OK) {
+        st = pn532_sam_config();
+    }
+    if (st == STATUS_OK) {
+        st = pn532_set_passive_retries(PN532_PASSIVE_RETRIES);
+    }
+    if (st == STATUS_OK) {
+        st = pn532_rf_field(false);
+    }
+    if (st == STATUS_OK) {
+        st = pn532_power_down();
     }
     return st;
 }

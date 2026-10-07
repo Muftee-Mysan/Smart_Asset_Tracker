@@ -20,6 +20,7 @@ typedef enum {
     TR_ERROR,           /* arg = status_t */
     TR_I2C_ERROR,       /* arg = (status_t << 16) | HAL I2C error code */
     TR_PN532_ERROR,     /* arg = (step << 16) | status_t */
+    TR_I2C_RECOVER,     /* arg = (SCL << 1) | SDA line levels before recovery */
 } trace_code_t;
 
 typedef struct {

@@ -59,6 +59,9 @@ _Static_assert(OLED_PAGES <= 8U, "dirty mask is 8 bits");
 static status_t send_cmds(const uint8_t *cmds, uint8_t n)
 {
     uint8_t buf[1U + 32U];
+    if (s_addr == 0U) {
+        return STATUS_NACK;     /* no display: never send to address 0 (general call) */
+    }
     if (n > 32U) {
         return STATUS_INVALID;
     }
@@ -120,6 +123,11 @@ uint8_t ssd1306_address(void)
     return s_addr;
 }
 
+bool ssd1306_is_present(void)
+{
+    return s_addr != 0U;
+}
+
 void ssd1306_clear(void)
 {
     memset(s_fb, 0, sizeof(s_fb));
@@ -175,6 +183,9 @@ uint8_t ssd1306_draw_text(uint8_t x, uint8_t page, const char *s, uint8_t scale)
 
 status_t ssd1306_flush(void)
 {
+    if (s_addr == 0U) {
+        return STATUS_NACK;
+    }
     for (uint8_t page = 0U; page < OLED_PAGES; page++) {
         if ((s_dirty & (1U << page)) == 0U) {
             continue;

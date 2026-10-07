@@ -152,6 +152,9 @@
 /* RFConfiguration MaxRetries, MxRtyPassiveActivation (UM0701-02 7.3.1,
  * Table 18). Default is 0xFF = retry forever, which would block. */
 #define PN532_PASSIVE_RETRIES   0x01U
+/* Consecutive failed card-read attempts before the PN532 is treated as
+ * lost and re-initialised (every BRINGUP_VDD_PERIOD_MS in bring-up). */
+#define NFC_FAIL_LIMIT          3U
 /* Period between card-read attempts while scanning (ms). */
 #define NFC_ATTEMPT_PERIOD_MS   300U
 

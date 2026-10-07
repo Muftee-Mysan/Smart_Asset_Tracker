@@ -56,6 +56,8 @@ static void flush(void)
 {
     if ((g_bringup.oled_addr != 0U) && (ssd1306_flush() != STATUS_OK)) {
         g_bringup.oled_errors++;
+        g_bringup.oled_lost++;
+        g_bringup.oled_addr = 0U;       /* stop drawing; retried every 5 s */
     }
 }
 
@@ -172,8 +174,10 @@ static void render_stats(void)
     fmt_u32(&f, g_bringup.card_reads);
     fmt_str(&f, " E:");
     fmt_u32(&f, g_bringup.nfc_errors);
-    fmt_char(&f, '/');
-    fmt_u32(&f, i2c_bus_error_count());
+    fmt_str(&f, " I:");
+    fmt_u32(&f, g_bringup.i2c_errors);
+    fmt_str(&f, " R:");
+    fmt_u32(&f, g_bringup.i2c_recoveries);
     show_line(LINE_STATS, b);
 }
 
@@ -208,22 +212,15 @@ static uint8_t fram_pattern_ok(uint8_t invert)
     return (memcmp(wr, rd, sizeof(wr)) == 0) ? 1U : 0U;
 }
 
+static uint32_t s_nfc_fail_streak;
+
 static void nfc_init(void)
 {
-    status_t st = pn532_get_firmware(&g_bringup.nfc_fw);
-    if (st != STATUS_OK) {
-        st = pn532_get_firmware(&g_bringup.nfc_fw);   /* first command may fail */
-    }
-    if (st == STATUS_OK) {
-        st = pn532_sam_config();
-    }
-    if (st == STATUS_OK) {
-        st = pn532_set_passive_retries(PN532_PASSIVE_RETRIES);
-    }
-    if (st == STATUS_OK) {
-        st = pn532_rf_field(false);
-    }
+    /* Ends with the PN532 in PowerDown; the first card-read attempt then
+     * exercises the wake-up path. */
+    const status_t st = pn532_init(&g_bringup.nfc_fw);
     g_bringup.nfc_ok = (st == STATUS_OK) ? 1U : 0U;
+    s_nfc_fail_streak = 0U;
     if (st != STATUS_OK) {
         g_bringup.nfc_errors++;
     }
@@ -244,15 +241,41 @@ static void nfc_attempt(void)
     }
     if (st != STATUS_OK) {
         g_bringup.nfc_errors++;
+        if (++s_nfc_fail_streak >= NFC_FAIL_LIMIT) {
+            g_bringup.nfc_ok = 0U;      /* lost: re-init from the slow loop */
+            render_nfc();
+        }
         render_stats();
         return;
     }
+    s_nfc_fail_streak = 0U;
     if (len > 0U) {
         memcpy(g_bringup.uid, uid, len);
         g_bringup.uid_len = len;
         g_bringup.card_reads++;
         render_uid();
         render_stats();
+    }
+}
+
+static void render_all(void)
+{
+    render_title();
+    render_i2c();
+    render_oled_fram();
+    render_nfc();
+    render_vdd();
+    render_key();
+    render_uid();
+    render_stats();
+}
+
+/* Re-detects the OLED after it stopped answering (e.g. unplugged). */
+static void oled_retry(void)
+{
+    if (ssd1306_init() == STATUS_OK) {
+        g_bringup.oled_addr = ssd1306_address();
+        render_all();
     }
 }
 
@@ -272,6 +295,7 @@ static void measure_vdd(void)
 void bringup_run(void)
 {
     memset(&g_bringup, 0, sizeof(g_bringup));
+    i2c_bus_init();
     keypad_awake_config();
     led_init();
 
@@ -292,13 +316,7 @@ void bringup_run(void)
     nfc_init();
     measure_vdd();
 
-    render_title();
-    render_i2c();
-    render_oled_fram();
-    render_nfc();
-    render_key();
-    render_uid();
-    render_stats();
+    render_all();
     flush();
 
     uint32_t last_tick = HAL_GetTick();
@@ -316,6 +334,8 @@ void bringup_run(void)
             /* No catch-up: an NFC attempt can block for tens of ms. */
             last_tick = now;
             g_app_dbg.heartbeat++;
+            g_bringup.i2c_errors = i2c_bus_error_count();
+            g_bringup.i2c_recoveries = i2c_bus_recovery_count();
 
             /* LED: slow heartbeat when every check passed, fast blink if
              * the OLED, FRAM or NFC check failed. */
@@ -345,8 +365,11 @@ void bringup_run(void)
             last_vdd = now;
             measure_vdd();
             if (!g_bringup.nfc_ok) {
-                nfc_init();                 /* e.g. module plugged in later */
+                nfc_init();                 /* e.g. module plugged in again */
                 render_nfc();
+            }
+            if (g_bringup.oled_addr == 0U) {
+                oled_retry();
             }
             render_stats();
         }

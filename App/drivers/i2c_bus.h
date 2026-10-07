@@ -1,9 +1,12 @@
 /**
  * @file    i2c_bus.h
- * @brief   Blocking wrapper over HAL I2C1 with timeouts and status_t errors.
+ * @brief   Blocking wrapper over HAL I2C1: timeouts, status_t errors, bus
+ *          recovery and one retry (CLAUDE.md 6.12).
  *
  * Addresses are 7-bit. Never call from an ISR.
- * Phase 2 adds bus recovery (9 SCL pulses + SWRST) and one retry.
+ * A NACK means "device absent or busy" and is returned as STATUS_NACK
+ * without recovery. A timeout, bus error, arbitration loss or stuck BUSY
+ * flag triggers bus recovery and one retry.
  */
 #ifndef APP_I2C_BUS_H
 #define APP_I2C_BUS_H
@@ -11,6 +14,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "status.h"
+
+/* Call once after MX_I2C1_Init(): recovers the bus if a line is stuck low
+ * or the BUSY flag is set (e.g. a reset in the middle of a transfer). */
+void i2c_bus_init(void);
+
+/* Re-initialises I2C1 at a new SCL frequency (Hz), e.g. 400000. */
+status_t i2c_bus_set_speed(uint32_t hz);
 
 /* Plain write: START, addr+W, data..., STOP. */
 status_t i2c_bus_write(uint8_t addr, const uint8_t *data, uint16_t len);
@@ -32,5 +42,8 @@ uint32_t i2c_bus_error_count(void);
 
 /* Transfers since boot that ended with a NACK (probes excluded). */
 uint32_t i2c_bus_nack_count(void);
+
+/* Bus recoveries since boot. */
+uint32_t i2c_bus_recovery_count(void);
 
 #endif /* APP_I2C_BUS_H */

@@ -9,6 +9,7 @@
 #ifndef APP_SSD1306_H
 #define APP_SSD1306_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "status.h"
 
@@ -18,6 +19,10 @@ status_t ssd1306_init(void);
 
 /* 7-bit address found by ssd1306_init(), or 0 if none. */
 uint8_t ssd1306_address(void);
+
+/* True if ssd1306_init() found a display. When false, flush/sleep/wake
+ * return STATUS_NACK without touching the bus. */
+bool ssd1306_is_present(void);
 
 void ssd1306_clear(void);
 void ssd1306_clear_page(uint8_t page);

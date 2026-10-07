@@ -12,6 +12,7 @@
  */
 #include "keypad.h"
 #include "config.h"
+#include "delay.h"
 #include "main.h"
 
 #define ROWS 4U
@@ -56,20 +57,9 @@ static char s_stable = KEY_NONE;    /* debounced state */
 static char s_candidate = KEY_NONE; /* raw state being confirmed */
 static uint8_t s_count;             /* ticks s_candidate has been seen */
 
-static void delay_us(uint32_t us)
-{
-    /* DWT cycle counter; SystemCoreClock = 16 MHz. */
-    const uint32_t start = DWT->CYCCNT;
-    const uint32_t cycles = us * (SystemCoreClock / 1000000U);
-    while ((DWT->CYCCNT - start) < cycles) {
-    }
-}
-
 void keypad_awake_config(void)
 {
-    /* Enable the DWT cycle counter for delay_us(). */
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    delay_init();
 
     /* Rows: stop EXTI interrupts while scanning; clear anything pending. */
     EXTI->IMR &= ~(uint32_t)ROW_EXTI_MASK;
@@ -89,6 +79,33 @@ void keypad_awake_config(void)
     s_stable = KEY_NONE;
     s_candidate = KEY_NONE;
     s_count = 0U;
+}
+
+void keypad_sleep_config(void)
+{
+    for (uint8_t c = 0U; c < COLS; c++) {
+        HAL_GPIO_WritePin(s_cols[c].port, s_cols[c].pin, GPIO_PIN_RESET);
+    }
+    EXTI->PR = ROW_EXTI_MASK;
+    EXTI->IMR |= ROW_EXTI_MASK;
+}
+
+bool keypad_all_released(void)
+{
+    bool released = true;
+    for (uint8_t c = 0U; c < COLS; c++) {
+        HAL_GPIO_WritePin(s_cols[c].port, s_cols[c].pin, GPIO_PIN_RESET);
+    }
+    delay_us(KEY_SETTLE_US);
+    for (uint8_t r = 0U; r < ROWS; r++) {
+        if (HAL_GPIO_ReadPin(s_rows[r].port, s_rows[r].pin) == GPIO_PIN_RESET) {
+            released = false;
+        }
+    }
+    for (uint8_t c = 0U; c < COLS; c++) {
+        HAL_GPIO_WritePin(s_cols[c].port, s_cols[c].pin, GPIO_PIN_SET);
+    }
+    return released;
 }
 
 char keypad_scan_raw(void)

@@ -32,6 +32,9 @@ typedef struct {
     uint8_t  fram_emulated; /* 1 = RAM emulator in use (Black Pill, no FRAM) */
     uint32_t nfc_attempt_ms;     /* duration of the last card-read attempt */
     uint32_t nfc_attempt_ms_max; /* longest card-read attempt since boot */
+    uint32_t i2c_errors;         /* bus errors/timeouts (not NACKs) since boot */
+    uint32_t i2c_recoveries;     /* bus recoveries since boot */
+    uint32_t oled_lost;          /* times the OLED stopped answering */
 } bringup_t;
 
 extern bringup_t g_bringup;

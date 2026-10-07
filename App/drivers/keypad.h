@@ -26,6 +26,14 @@ typedef struct {
  * keypad_tick(). */
 void keypad_awake_config(void);
 
+/* Sleep mode (CLAUDE.md 6.4): all columns driven low, row EXTIs (falling
+ * edge, set up by CubeMX) enabled with pending bits cleared, so any key
+ * press wakes the MCU. */
+void keypad_sleep_config(void);
+
+/* True when no key is pressed (checked with all columns low). */
+bool keypad_all_released(void);
+
 /* Call every TICK_PERIOD_MS. Returns true and fills *ev when a debounced
  * key goes down or up. Multi-key presses are ignored. */
 bool keypad_tick(key_event_t *ev);

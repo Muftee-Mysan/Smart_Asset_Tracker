@@ -1,5 +1,30 @@
 # Changelog
 
+## Phase 2 — Drivers and error paths (unreleased, FW 0.0)
+
+- `i2c_bus`: bus recovery per CLAUDE.md 6.12 (de-init, up to 9 SCL pulses with SDA
+  released, STOP, `I2C_CR1_SWRST`, re-init) and one retry on timeout, bus error,
+  arbitration loss or stuck BUSY. NACKs are returned without recovery. Recovery also
+  runs at boot if a line is stuck low. `i2c_bus_set_speed()` added for Phase 4.
+  Recovery count exposed and traced.
+- `pn532`: `pn532_init()` boot sequence (GetFirmwareVersion retried once,
+  SAMConfiguration, MaxRetries, RF off, PowerDown); `pn532_power_down()` with I2C as
+  the only wake source (WakeUpEnable 0x80, UM0701-02 7.2.11) and a 2 ms settle;
+  status byte checked on bits 0-5 (7.1). Command + ACK retried once (wake from
+  PowerDown).
+- `keypad`: `keypad_sleep_config()` and `keypad_all_released()` for Phase 4.
+- `ssd1306`: refuses to send when no display was found (address 0 would be a general
+  call); `ssd1306_is_present()`.
+- `delay`: shared DWT microsecond delay.
+- Bring-up: NFC marked lost after 3 failed reads and re-initialised every 5 s; OLED
+  re-detected every 5 s after it stops answering; stats line shows card reads, NFC
+  errors, I2C errors, recoveries.
+- Verified on the Black Pill: card reads after PowerDown wake; PN532 unplugged while
+  running -> NFC:ERROR, fast LED, keypad still responsive, no hang; plugged back ->
+  re-initialised automatically and reads again. 0 I2C bus errors (absent device gives
+  NACKs). Longest card-read attempt 44 ms.
+- Not yet tested on hardware: forced bus recovery (SDA shorted to GND).
+
 ## Phase 1 — Bring-up test (unreleased, FW 0.0)
 
 - Board switch `APP_BOARD_BLACKPILL` (CLAUDE.md 3.5); development now on a WeAct Black Pill.
