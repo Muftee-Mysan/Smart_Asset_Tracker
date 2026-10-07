@@ -83,6 +83,39 @@ The keypad mapping comes from the Parallax 27899 datasheet (pins 1–4 = columns
 - J4 OLED: 1 GND, 2 +5, 3 SCL, 4 SDA
 - P1 SWD: 1 GND, 2 SWCLK (PA14), 3 SWDIO (PA13), 4 3V3
 
+### 3.5 Development board: WeAct Black Pill (STM32F411CEU6) — used FIRST
+
+Development starts on a WeAct Black Pill, which has the same MCU and package as the custom PCB, so the same CubeMX project, pin map and firmware are used. The custom PCB comes later. A single switch selects the board:
+
+```c
+// App/config.h
+#define APP_BOARD_BLACKPILL   1   // 1 = Black Pill on breadboard, 0 = custom PCB
+```
+
+**Breadboard wiring (same MCU pins as the PCB):**
+
+| Device | Device pin | Black Pill pin |
+|---|---|---|
+| OLED | VCC / GND / SCL / SDA | 5V / GND / B6 / B7 |
+| PN532 (mode switches set to I2C) | VCC / GND / SDA / SCL | 5V / GND / B7 / B6 |
+| I2C pull-ups | 10k from SCL and from SDA to 3V3 | B6, B7 (matches R3/R4 on the PCB) |
+| Keypad pin 1 / 2 / 3 / 4 | Col 4 / 3 / 2 / 1 | B9 / B8 / B14 / A1 |
+| Keypad pin 5 / 6 / 7 / 8 | Row 4 / 3 / 2 / 1 | B5 / B13 / B12 / B10 |
+| ST-LINK | SWDIO / SWCLK / GND / NRST | DIO / CLK / GND / R |
+| Power | USB-C cable | Supplies 5V pin and onboard 3.3V regulator |
+
+If the ST-LINK is a clone that outputs 3.3 V, do not connect its 3.3 V pin while the board is powered from USB-C.
+
+**Differences the firmware must handle when `APP_BOARD_BLACKPILL == 1`:**
+- **FRAM may be absent.** At boot, probe address 0x50. If there is no ACK, use a RAM-backed FRAM emulator (static 32 KB array behind the same `fram_read()/fram_write()` API). Show "FRAM: RAM EMU" on the OLED at boot. Data is lost on reset, which is acceptable for testing the logic. This fallback is compiled out when `APP_BOARD_BLACKPILL == 0`; there, a missing FRAM is an error.
+- **LED on PC13 (active low)**: use it as a debug heartbeat and error blinker. Configure PC13 in `App/` code (CubeMX leaves it analog). Not used on the PCB.
+- **NRST is reachable** through the ST-LINK, so "connect under reset" works on this board. The PCB recovery procedure (§9) is still needed later.
+- **Crystals are fitted** (25 MHz HSE, 32.768 kHz LSE) but **not used**. The clock setup stays HSI + LSI so that timing behaviour matches the PCB.
+- **Battery checks**: VDD is a steady 3.3 V from USB, so the battery logic always reads "OK". Test the thresholds by temporarily lowering them in `config.h`.
+- **Power numbers are not representative**: the onboard power LED and regulator dominate. Power work on the Black Pill checks behaviour (STOP entry/exit, modules sleeping), not current.
+
+Phases 0–5 are done on the Black Pill. Moving to the PCB is its own step (Phase 6a in §8): set `APP_BOARD_BLACKPILL 0`, check the +5 V rail with a multimeter before connecting modules, rerun the Phase 1 bring-up, then the full application tests.
+
 ---
 
 ## 4. Project setup — generated with STM32CubeMX
@@ -398,6 +431,8 @@ Finish and get user confirmation for each phase before starting the next.
 
 **Phase 5 — Export, time, safety**: export mode, mailbox time sync, `export_log.py` with drift correction, LSI calibration, battery thresholds, BOR level 3 (ask first), IWDG with RTC wake kicks.
 - Test: export → CSV matches the device's info screen; after a sync, timestamps are correct; IWDG doesn't fire during a long session or overnight sleep.
+
+**Phase 6a — Move to the custom PCB**: set `APP_BOARD_BLACKPILL 0`. The user confirms +5 V reads 5.0–5.1 V with no modules connected (boost trimmer R1 adjusted). Rerun Phase 1 bring-up on the PCB, then the Phase 3–5 tests. Note any differences.
 
 **Phase 6 — Hardening**: log-full behaviour, I2C fault injection, review all timeouts, stack usage check (`-fstack-usage`), final `README.md` for users (how to use the device, how to export, how to add students).
 

@@ -18,6 +18,8 @@ typedef enum {
     TR_RTC_WAKE,        /* arg = RTC wake count */
     TR_KEY_IRQ,         /* arg = key IRQ count */
     TR_ERROR,           /* arg = status_t */
+    TR_I2C_ERROR,       /* arg = (status_t << 16) | HAL I2C error code */
+    TR_PN532_ERROR,     /* arg = (step << 16) | status_t */
 } trace_code_t;
 
 typedef struct {

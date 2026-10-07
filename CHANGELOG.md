@@ -1,5 +1,28 @@
 # Changelog
 
+## Phase 1 — Bring-up test (unreleased, FW 0.0)
+
+- Board switch `APP_BOARD_BLACKPILL` (CLAUDE.md 3.5); development now on a WeAct Black Pill.
+- Drivers: `i2c_bus` (timeouts, status_t, NACKs counted apart from bus errors), `ssd1306`
+  (address detect 0x3C/0x3D, dirty-page flush, 6x8 text, 2x scale), `font` (6x8, CC0),
+  `fram` (2-byte address, 256-byte chunks; RAM emulator on the Black Pill when no FRAM
+  answers), `keypad` (open-drain column scan, 20 ms debounce), `pn532` (I2C status
+  polling, ACK, checksums, GetFirmwareVersion, SAMConfiguration, RFConfiguration,
+  InListPassiveTarget), `led` (PC13, Black Pill only).
+- Services: `battery` (VDD from VREFINT_CAL, 8 samples, VREFINT off afterwards).
+- `bringup.c` (`APP_MODE_BRINGUP`): I2C scan, OLED "Hello", FRAM pattern test in the
+  scratch area, NFC firmware + config, VDD, live key and card UID display, LED
+  heartbeat (slow = all OK, fast = a check failed). Results also in `g_bringup`.
+- PN532 MaxRetries (MxRtyPassiveActivation) set to 1: the default 0xFF never returns
+  without a card (UM0701-02 Table 18).
+- Verified on the Black Pill: I2C 0x24 + 0x3C, OLED OK, FRAM RAM emulator OK,
+  PN532 IC 0x32 v1.6, VDD 3331 mV, all 16 keys correct, card UID DAE9351D read
+  (21 reads, 0 errors). One NFC attempt takes 40 ms without a card.
+- Custom PCB (for Phase 6a): open joints on PB5, PB6, PB10 and later PA1 were found
+  and partly reworked; the board stopped answering SWD after the last rework
+  (suspect VCAP1/pin 22 or NRST). FRAM on the PCB passed the pattern test once SCL
+  was fixed.
+
 ## Phase 0 — Skeleton (unreleased, FW 0.0)
 
 - `App/` structure: `config.h`, `status.h`, `app_main.c/.h`, `services/{power,rtc_time,trace}.c/.h`;

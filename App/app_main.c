@@ -6,6 +6,7 @@
  * The state machine (app_sm) and STOP mode come in later phases.
  */
 #include "app_main.h"
+#include "bringup.h"
 #include "config.h"
 #include "status.h"
 #include "main.h"
@@ -50,6 +51,10 @@ void app_init(void)
 
 void app_run(void)
 {
+#if APP_MODE == APP_MODE_BRINGUP
+    bringup_run();
+#endif
+
     uint32_t last_tick = HAL_GetTick();
 
     for (;;) {

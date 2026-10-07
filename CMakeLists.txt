@@ -46,6 +46,16 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     App/app_main.c
+    App/bringup.c
+    App/fmt.c
+    App/drivers/font.c
+    App/drivers/fram.c
+    App/drivers/i2c_bus.c
+    App/drivers/keypad.c
+    App/drivers/led.c
+    App/drivers/pn532.c
+    App/drivers/ssd1306.c
+    App/services/battery.c
     App/services/power.c
     App/services/rtc_time.c
     App/services/trace.c
