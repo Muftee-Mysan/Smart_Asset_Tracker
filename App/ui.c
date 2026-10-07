@@ -287,7 +287,8 @@ void ui_set_time(const char *digits)
     text(PAGE_LAST, "#=set *=delete");
 }
 
-void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz)
+void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz,
+             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes)
 {
     char b[LINE_CHARS + 1U];
     fmt_t f;
@@ -340,6 +341,15 @@ void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz
     fmt_char(&f, '.');
     fmt_u32(&f, FW_VERSION_MINOR);
     text(5U, b);
+
+    fmt_init(&f, b, sizeof(b));
+    fmt_str(&f, "W");
+    fmt_u32(&f, key_wakes);
+    fmt_str(&f, " S");
+    fmt_u32(&f, stops);
+    fmt_str(&f, " R");
+    fmt_u32(&f, rtc_wakes);
+    text(6U, b);
     text(PAGE_LAST, "Any key=back");
 }
 

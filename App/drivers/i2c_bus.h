@@ -22,6 +22,12 @@ void i2c_bus_init(void);
 /* Re-initialises I2C1 at a new SCL frequency (Hz), e.g. 400000. */
 status_t i2c_bus_set_speed(uint32_t hz);
 
+/* Before STOP: I2C1 off, SCL/SDA to analog (CLAUDE.md 6.10 step 2). */
+void i2c_bus_suspend(void);
+
+/* After a key wake: I2C1 back on at the last speed; recovers a stuck bus. */
+void i2c_bus_resume(void);
+
 /* Plain write: START, addr+W, data..., STOP. */
 status_t i2c_bus_write(uint8_t addr, const uint8_t *data, uint16_t len);
 

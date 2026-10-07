@@ -19,6 +19,7 @@
 #include "keypad.h"
 #include "led.h"
 #include "pn532.h"
+#include "power.h"
 #include "rtc_time.h"
 #include "ssd1306.h"
 #include "stm32f4xx_hal.h"
@@ -338,7 +339,8 @@ static void enter(state_t next)
     case ST_INFO: {
         uint16_t mv = 0U;
         (void)battery_read_mv(&mv);
-        ui_info(storage_count(), LOG_CAPACITY, mv, 0U);   /* LSI: Phase 5 */
+        ui_info(storage_count(), LOG_CAPACITY, mv, 0U,    /* LSI: Phase 5 */
+                power_key_wake_count(), power_stop_count(), power_rtc_wake_count());
         break;
     }
     case ST_READ_UID:
@@ -582,6 +584,7 @@ static void on_format_confirm(const app_event_t *ev)
 void app_sm_init(void)
 {
     i2c_bus_init();
+    (void)i2c_bus_set_speed(I2C_SPEED_HZ);     /* 400 kHz from here on */
     keypad_awake_config();
     led_init();
 

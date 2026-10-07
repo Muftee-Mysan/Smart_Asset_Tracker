@@ -53,6 +53,8 @@ static const char s_map[ROWS][COLS] = {
  * (N - 1) ticks, so 20 ms at 10 ms/tick needs 3 samples. */
 #define DEBOUNCE_TICKS  ((KEY_DEBOUNCE_MS + TICK_PERIOD_MS - 1U) / TICK_PERIOD_MS + 1U)
 
+static volatile bool s_irq;
+
 static char s_stable = KEY_NONE;    /* debounced state */
 static char s_candidate = KEY_NONE; /* raw state being confirmed */
 static uint8_t s_count;             /* ticks s_candidate has been seen */
@@ -106,6 +108,34 @@ bool keypad_all_released(void)
         HAL_GPIO_WritePin(s_cols[c].port, s_cols[c].pin, GPIO_PIN_SET);
     }
     return released;
+}
+
+bool keypad_row_active(void)
+{
+    for (uint8_t r = 0U; r < ROWS; r++) {
+        if (HAL_GPIO_ReadPin(s_rows[r].port, s_rows[r].pin) == GPIO_PIN_RESET) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool keypad_take_irq_flag(void)
+{
+    if (!s_irq) {
+        return false;
+    }
+    s_irq = false;
+    return true;
+}
+
+/* HAL callback from the row EXTI handlers (EXTI9_5, EXTI15_10).
+ * ISR: set a flag only. */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if ((GPIO_Pin & ROW_EXTI_MASK) != 0U) {
+        s_irq = true;
+    }
 }
 
 char keypad_scan_raw(void)

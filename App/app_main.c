@@ -4,8 +4,9 @@
  *
  * ISRs only set flags. The loop turns them into events (CLAUDE.md 6.2):
  * EV_RTC_WAKE, then every TICK_PERIOD_MS the debounced key events followed
- * by EV_TICK, each run through the state machine in order. Between ticks
- * the core idles in __WFI() (Release). STOP mode in ST_SLEEP is Phase 4.
+ * by EV_TICK, each run through the state machine in order. Then:
+ * ST_SLEEP and no key held -> STOP until a key wakes the device; otherwise
+ * __WFI() until the next SysTick (Release builds).
  */
 #include "app_main.h"
 #include "app_sm.h"
@@ -22,8 +23,6 @@
 #define UNIX_TIME_REFRESH_TICKS  10U
 
 volatile app_dbg_t g_app_dbg;
-
-static volatile bool s_key_irq;
 
 static void report_error(status_t st)
 {
@@ -70,11 +69,6 @@ void app_run(void)
             app_sm_handle(&ev);
         }
 
-        if (s_key_irq) {
-            s_key_irq = false;
-            g_app_dbg.key_irqs++;
-            TRACE(TR_KEY_IRQ, g_app_dbg.key_irqs);
-        }
 
         if ((HAL_GetTick() - last_tick) >= TICK_PERIOD_MS) {
             /* No catch-up: an NFC attempt can block for tens of ms. */
@@ -102,16 +96,20 @@ void app_run(void)
             }
         }
 
+        if (app_sm_is_sleeping() && power_stop_allowed() && keypad_all_released()) {
+            power_sleep_until_key();
+            g_app_dbg.key_irqs++;
+            TRACE(TR_KEY_IRQ, g_app_dbg.key_irqs);
+            g_app_dbg.stop_count = power_stop_count();
+            g_app_dbg.key_wakes = power_key_wake_count();
+            g_app_dbg.rtc_only_wakes = power_rtc_wake_count();
+            last_tick = HAL_GetTick() - TICK_PERIOD_MS;   /* scan keys now */
+            continue;
+        }
+
 #if APP_IDLE_USE_WFI
         /* Sleep until the next interrupt (SysTick at the latest, 1 ms). */
         __WFI();
 #endif
     }
-}
-
-/* HAL callback from the keypad row EXTI handlers. ISR: set a flag only. */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-    (void)GPIO_Pin;
-    s_key_irq = true;
 }

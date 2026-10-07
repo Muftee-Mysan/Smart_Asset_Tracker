@@ -45,7 +45,9 @@ void ui_admin_pin(uint8_t entered);
 void ui_admin_menu(void);
 void ui_clear_confirm(uint32_t count, bool second_press);
 void ui_set_time(const char *digits);
-void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz);
+/* Info screen. Last line: key wakes, STOP entries, RTC-only wakes. */
+void ui_info(uint32_t count, uint32_t capacity, uint16_t vdd_mv, uint32_t lsi_hz,
+             uint32_t key_wakes, uint32_t stops, uint32_t rtc_wakes);
 void ui_read_uid(const uint8_t *uid, uint8_t uid_len, const student_t *s);
 
 #endif /* APP_UI_H */

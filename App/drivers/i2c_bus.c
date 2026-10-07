@@ -114,6 +114,27 @@ status_t i2c_bus_set_speed(uint32_t hz)
     return status_from_hal(HAL_I2C_Init(&hi2c1));
 }
 
+void i2c_bus_suspend(void)
+{
+    (void)HAL_I2C_DeInit(&hi2c1);
+    GPIO_InitTypeDef gi = {0};
+    gi.Pin = SCL_PIN | SDA_PIN;
+    gi.Mode = GPIO_MODE_ANALOG;
+    gi.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(SCL_PORT, &gi);
+}
+
+void i2c_bus_resume(void)
+{
+    /* hi2c1.Init keeps the speed set by i2c_bus_set_speed(). */
+    if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
+        s_errors++;
+    }
+    if (bus_stuck()) {
+        bus_recover();
+    }
+}
+
 static HAL_StatusTypeDef hal_xfer(op_t op, uint8_t addr, uint16_t mem, uint8_t mem_size,
                                   uint8_t *data, uint16_t len)
 {

@@ -78,6 +78,10 @@
 /* I2C bus (I2C1)                                                             */
 /* ------------------------------------------------------------------------- */
 
+/* Bus speed after bring-up (CLAUDE.md 3.3, Phase 4). PN532 (UM0701-02
+ * 6.2.4) and SSD1306 both support 400 kHz fast mode. */
+#define I2C_SPEED_HZ            400000U
+
 /* Timeout per HAL I2C transfer (ms). Longest Phase 1 transfer is a 256-byte
  * FRAM chunk: ~24 ms at 100 kHz. */
 #define I2C_TIMEOUT_MS          50U
@@ -202,6 +206,10 @@
 /* ------------------------------------------------------------------------- */
 /* Trace (Debug builds only)                                                  */
 /* ------------------------------------------------------------------------- */
+
+/* Debug builds: no STOP mode during the first few seconds after reset, so a
+ * debugger can attach (CLAUDE.md 6.10) (ms). */
+#define DEBUG_STOP_DELAY_MS     3000U
 
 /* Number of entries in the RAM trace ring buffer (12 bytes each). */
 #define TRACE_DEPTH             64U

@@ -1,5 +1,22 @@
 # Changelog
 
+## Phase 4 — Low power (unreleased, FW 0.0)
+
+- `power.c`: `power_sleep_until_key()` follows CLAUDE.md 6.10: I2C1 off with pins
+  analog, keypad sleep config (columns low, row EXTIs on, pending cleared), RTC
+  wake-up flag and EXTI 22 cleared, SysTick suspended, flash power-down, low-power
+  regulator in low-voltage mode, STOP via WFI. RTC-only wakes go straight back to
+  STOP; a key wake restores keypad scanning and I2C1. STOP is skipped while a key is
+  held. Debug builds wait 3 s after reset before the first STOP.
+- `keypad.c` owns the row EXTI callback (flag only). `i2c_bus`: suspend/resume.
+- I2C runs at 400 kHz after boot (`I2C_SPEED_HZ`).
+- Info screen shows key wakes / STOP entries / RTC-only wakes.
+- Verified on the Black Pill: wake from STOP by key, card read and save at 400 kHz.
+  50-cycle wake/sleep test not run (user's choice).
+- Finding: the ST-LINK cannot attach while the core is in STOP (even with DBG_STOP
+  set), and connect-under-reset does not work on this ST-LINK/Black Pill setup.
+  To flash or read memory, wake the device with a key first.
+
 ## Phase 3 — Application (unreleased, FW 0.0)
 
 - `app_sm.c`: state machine per CLAUDE.md 6.3 (SLEEP, SCAN, STUDENT, ASSET, MSG,

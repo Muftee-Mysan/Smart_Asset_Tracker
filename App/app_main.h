@@ -17,6 +17,9 @@ typedef struct {
     uint32_t reset_flags;     /* RCC_CSR reset flags captured at boot */
     uint32_t error_count;     /* errors reported by app code since boot */
     uint8_t  boot_from_bkup;  /* 1 = calendar kept from before the reset */
+    uint32_t stop_count;      /* STOP entries */
+    uint32_t key_wakes;       /* wakes from STOP by a key */
+    uint32_t rtc_only_wakes;  /* RTC wakes that went straight back to STOP */
 } app_dbg_t;
 
 extern volatile app_dbg_t g_app_dbg;

@@ -34,6 +34,13 @@ void keypad_sleep_config(void);
 /* True when no key is pressed (checked with all columns low). */
 bool keypad_all_released(void);
 
+/* Sleep mode only: true if a row is low right now (a key is held), i.e. a
+ * falling edge may already have been missed. */
+bool keypad_row_active(void);
+
+/* Returns and clears the "row EXTI fired" flag (set by the EXTI callback). */
+bool keypad_take_irq_flag(void);
+
 /* Call every TICK_PERIOD_MS. Returns true and fills *ev when a debounced
  * key goes down or up. Multi-key presses are ignored. */
 bool keypad_tick(key_event_t *ev);
